@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/hyperledger-labs/orion-server/config"
@@ -277,6 +278,38 @@ func (c *Cluster) StartServer(s *Server) error {
 	s.createCmdToStartServers(c.bdbBinaryPath)
 
 	return s.start(c.cmdTimeout)
+}
+
+func (c *Cluster) GetServerByID(serverID string) (*Server, int) {
+	if serverID == "" {
+		return nil, -1
+	}
+	for i, srv := range c.Servers {
+		if srv.serverID == serverID {
+			return srv, i
+		}
+	}
+	return nil, -1
+}
+
+func (c *Cluster) AgreedLeader(t *testing.T, activeServers ...int) int {
+	var leaders [3]int
+	var leader int
+
+	for _, srvVal := range activeServers {
+		clusterStatusResEnv, err := c.Servers[srvVal].QueryClusterStatus(t)
+		if err == nil && clusterStatusResEnv != nil {
+			_, leader = c.GetServerByID(clusterStatusResEnv.GetResponse().GetLeader())
+			leaders[srvVal] = leader
+		}
+	}
+
+	for _, srvVal := range activeServers {
+		if leaders[srvVal] != leader {
+			return -1
+		}
+	}
+	return leader
 }
 
 func (c *Cluster) createCryptoMaterials() error {
